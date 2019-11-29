@@ -6,116 +6,108 @@
 # -- Proyecto final
 # -- Noviembre 29, 2019
 
-# -- Ernesto Cervantes Juarez
-# -- A01196642
-# -- Mauricio Nañez Pro
-# -- A01194458
-# -- Fernando Carrillo Mora
-# -- A01194204
-# -- Ernesto Cervantes Juarez
-# -- A01196642
+# -- Ernesto Cervantes Juarez   Mauricio Nañez Pro
+# -- A01196642                  A01194458
+# -- Fernando Carrillo Mora     Marco Ortiz
+# -- A01194204                  A01196642
 # ----------------------------------------------------------------------------------
 
-# debe de dar el nombre de archivo al momento de correr el programa.
+# IMPORTANTE: se debe de dar el nombre de archivo al momento de correr el programa.
 
 import sys
 import math
 
-waitQueue = []
-blockedQueue = []
-processStatus = {}
-clk = 0
-llega_length = 3
-cpu = None
-
 logLines = []
 quantum = 0
 case = 0 # 0 RR   1 prioNonPreemptive
+llega_length = 3
 
+processStatus = {}
+waitQueue = []
+blockedQueue = []
 
-def llega(words):
+clk = 0
+cpu = None
+
+def llega(words, line):
     global waitQueue
-    numbers = validateLength(words, llega_length)
-    pID = numbers[1]
-    if pID in processStatus:
-        error("Ya estaba el proceso")
+    timestamp, processID  = validateLengthAndReturnNumbers(words, llega_length, line)[0:1]
+    if processID in processStatus:
+        error(line, "El proceso " + str(processID) + " ya estaba dentro en " + processStatus[processID])
     else:
-        processStatus[pID] = 'waitQueue'
-        waitQueue.append(pID)
+        processStatus[processID] = 'waitQueue'
+        waitQueue.append(processID)
+    if cpu is None:
+            endCurrentProcess(False, timestamp)
 
 
-def acaba(words):
+def acaba(words, line):
     global processStatus, waitQueue, blockedQueue
-    numbers = validateLength(words, 3)
-    pID = numbers[1]
-    if not pID in processStatus:
-        error("No estaba el proceso")
+    timestamp, processID  = validateLengthAndReturnNumbers(words, 3, line)
+    if not processID in processStatus:
+        error(line, "El proceso " + str(processID) + " no estaba registrado.")
     else:
-        if processStatus[pID] == 'waitQueue':
-            waitQueue.remove(pID)
-            processStatus.pop(pID)
-            print('clk', numbers[0], '   processStatus', processStatus)
-        elif processStatus[pID] == 'blockedQueue':
-            blockedQueue.remove(pID)
-            processStatus.pop(pID)
-            print('clk', numbers[0], '   processStatus', processStatus)
-        else:
-            processStatus.pop(pID)
-            changePIDactual(False, numbers[0])
+        status = processStatus[processID]
+        processStatus.pop(processID)
+        if status == 'running':
+            endCurrentProcess(False, timestamp)
+            return
+        if status == 'waitQueue':
+            waitQueue.remove(processID)
+        elif status == 'blockedQueue':
+            blockedQueue.remove(processID)
+        print('clk', timestamp, '   processStatus', processStatus)
 
 
-def startIO(words):
+def startIO(words, line):
     global processStatus, waitQueue, blockedQueue
-    numbers = validateLength(words, 3)
-    pID = numbers[1]
-    if not pID in processStatus:
-        error("No estaba el proceso")
+    timestamp, processID = validateLengthAndReturnNumbers(words, 3, line)
+    if not processID in processStatus:
+        error(line, "El proceso " + str(processID) + " no estaba registrado.")
     else:
-        if processStatus[pID] == 'waitQueue':
-            waitQueue.remove(pID)
-            blockedQueue.append(pID)
-            processStatus[pID] = 'blockedQueue'
-            print('clk', numbers[0], '   processStatus', processStatus)
-        elif processStatus[pID] == 'blockedQueue':
-            error("ya estaba en la lista")
+        status = processStatus[processID]
+        if status == 'blockedQueue':
+            error(line, "El proceso " + str(processID) + " ya estaba bloqueado.")
+        processStatus[processID] = 'blockedQueue'
+        blockedQueue.append(processID)
+        if status == 'waitQueue':
+            waitQueue.remove(processID)
+            print('clk', timestamp, '   processStatus', processStatus)
         else:
-            processStatus[pID] = 'blockedQueue'
-            blockedQueue.append(pID)
-            changePIDactual(False, numbers[0])
+            endCurrentProcess(False, timestamp)
 
 
-def endIO(words):
+def endIO(words, line):
     global processStatus, waitQueue, blockedQueue
-    numbers = validateLength(words, 3)
-    pID = numbers[1]
-    if not pID in processStatus:
-        error("No estaba el proceso")
+    processID  = validateLengthAndReturnNumbers(words, 3, line)[1]
+    if not processID in processStatus:
+        error(line, "El proceso " + str(processID) + " no estaba registrado.")
     else:
-        if processStatus[pID] == 'blockedQueue':
-            blockedQueue.remove(pID)
-            waitQueue.append(pID)
-            processStatus[pID] = 'waitQueue'
+        if processStatus[processID] == 'blockedQueue':
+            blockedQueue.remove(processID)
+            processStatus[processID] = 'waitQueue'
+            waitQueue.append(processID)
         else:
-            error("no estaba en la lista")
+            error(line, "El proceso " + str(processID) + " no estaba bloqueado.")
 
 
 def endSimulacion(words):
-    error("clk " +words[0]+ "    fin")
+    sys.exit("clk "+ words[0] + "    fin")
 
 
-def error(message):
-    sys.exit(message)
+def error(line, message):
+    sys.exit("ERROR en línea " + str(line) + ": "+ message)
 
 
-def validateLength(words, length):
+def validateLengthAndReturnNumbers(words, length, line):
     if len(words) != length:
-        error("Faltaron argumentos")
+        error(line, "Faltaron argumentos. Había " + str(len(words)) + " y se esperaban " + str(length) + ".")
     return [int(s) for s in words if s.isdigit()]
 
-def changePIDactual(goToWait, time):
+def endCurrentProcess(goToBlockedQueue, timestamp):
     global cpu, clk
-    clk = time
-    if goToWait and (cpu is not None):
+    clk = timestamp
+    if goToBlockedQueue and (cpu is not None):
         waitQueue.append(cpu)
         processStatus[cpu] = 'waitQueue'
     if waitQueue:
@@ -126,43 +118,38 @@ def changePIDactual(goToWait, time):
         cpu = None
 
 
-txtFile = open("RR.log")  # sys.argv[1]
-for line in txtFile:
+logFile = open(sys.argv[1])
+for line in logFile:
     logLines.append(line)
 
 #case = str.strip(logLines[0])
 quantum = int(logLines[1][7:])
-
 logLines.pop(0)
 logLines.pop(0)
 
-for log in logLines:
-    log = str.strip(log)
-    words = log.split()
-    timestamp = int(words[0])
+for line, log in enumerate(logLines, start=3):
+    words = str.strip(log).split()
+    timestamp, instruction = words[0:2]
+    if not timestamp.isdigit():
+        error(line, "No se puede leer timestamp.")
+    timestamp = int(timestamp)
 
     if(timestamp - clk) > quantum and waitQueue:
         ciclos = math.floor((timestamp - clk) / quantum)
         for i in range(0, ciclos):
-            changePIDactual(True, clk + quantum)
+            endCurrentProcess(True, clk + quantum)
 
-    if words[1] == "Llega":
-        llega(words)
-        print('clk', timestamp, '   processStatus', processStatus)
-        if cpu is None:
-            changePIDactual(False, timestamp)
-    elif words[1] == "Acaba":
-        acaba(words)
-    elif words[1] == "startI/O":
-        startIO(words)
-    elif words[1] == "endI/O":
-        endIO(words)
-        print('clk', timestamp, '   processStatus', processStatus)
-    elif words[1] == "endSimulacion":
+    if instruction == "Llega":
+        llega(words, line)
+    elif instruction == "Acaba":
+        acaba(words, line)
+    elif instruction == "startI/O":
+        startIO(words, line)
+    elif instruction == "endI/O":
+        endIO(words, line)
+    elif instruction == "endSimulacion":
         endSimulacion(words)
-        print('clk', timestamp, '   processStatus', processStatus)
     else:
-        error("error de cod")
-
-
-
+        error(line, "No se puede leer log : \'" + log + "\'")
+    if instruction == "Llega" or instruction == "endI/O" or instruction == "endSimulacion":
+        print('clk', timestamp, '   processStatus', processStatus)
