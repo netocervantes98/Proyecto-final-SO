@@ -19,13 +19,14 @@
 # debe de dar el nombre de archivo al momento de correr el programa.
 
 import sys
+import math
 
 waitQueue = []
 blockedQueue = []
 processStatus = {}
 clk = 0
 llega_length = 3
-PID_actual = 0
+cpu = None
 
 logLines = []
 quantum = 0
@@ -52,11 +53,15 @@ def acaba(words):
     else:
         if processStatus[pID] == 'waitQueue':
             waitQueue.remove(pID)
+            processStatus.pop(pID)
+            print('clk', numbers[0], '   processStatus', processStatus)
         elif processStatus[pID] == 'blockedQueue':
             blockedQueue.remove(pID)
+            processStatus.pop(pID)
+            print('clk', numbers[0], '   processStatus', processStatus)
         else:
-            changePIDactual(False)
-        processStatus.pop(pID)
+            processStatus.pop(pID)
+            changePIDactual(False, numbers[0])
 
 
 def startIO(words):
@@ -69,12 +74,14 @@ def startIO(words):
         if processStatus[pID] == 'waitQueue':
             waitQueue.remove(pID)
             blockedQueue.append(pID)
+            processStatus[pID] = 'blockedQueue'
+            print('clk', numbers[0], '   processStatus', processStatus)
         elif processStatus[pID] == 'blockedQueue':
             error("ya estaba en la lista")
         else:
-            changePIDactual(False)
+            processStatus[pID] = 'blockedQueue'
             blockedQueue.append(pID)
-        processStatus[pID] = 'blockedQueue'
+            changePIDactual(False, numbers[0])
 
 
 def endIO(words):
@@ -93,7 +100,7 @@ def endIO(words):
 
 
 def endSimulacion(words):
-    pass
+    error("clk " +words[0]+ "    fin")
 
 
 def error(message):
@@ -105,19 +112,21 @@ def validateLength(words, length):
         error("Faltaron argumentos")
     return [int(s) for s in words if s.isdigit()]
 
-
-def changePIDactual(goToWait):
-    global PID_actual
-    if goToWait:
-        waitQueue.append(PID_actual)
-        processStatus[PID_actual] = 'waitQueue'
+def changePIDactual(goToWait, time):
+    global cpu, clk
+    clk = time
+    if goToWait and (cpu is not None):
+        waitQueue.append(cpu)
+        processStatus[cpu] = 'waitQueue'
     if waitQueue:
-        PID_actual = waitQueue.pop(0)
-        processStatus[PID_actual] = 'running'
+        cpu = waitQueue.pop(0)
+        processStatus[cpu] = 'running'
+        print('clk', clk, '   processStatus', processStatus)
+    else:
+        cpu = None
 
 
-
-txtFile = open(sys.argv[1])
+txtFile = open("RR.log")  # sys.argv[1]
 for line in txtFile:
     logLines.append(line)
 
@@ -130,19 +139,30 @@ logLines.pop(0)
 for log in logLines:
     log = str.strip(log)
     words = log.split()
+    timestamp = int(words[0])
+
+    if(timestamp - clk) > quantum and waitQueue:
+        ciclos = math.floor((timestamp - clk) / quantum)
+        for i in range(0, ciclos):
+            changePIDactual(True, clk + quantum)
+
     if words[1] == "Llega":
         llega(words)
+        print('clk', timestamp, '   processStatus', processStatus)
+        if cpu is None:
+            changePIDactual(False, timestamp)
     elif words[1] == "Acaba":
         acaba(words)
     elif words[1] == "startI/O":
         startIO(words)
     elif words[1] == "endI/O":
         endIO(words)
+        print('clk', timestamp, '   processStatus', processStatus)
     elif words[1] == "endSimulacion":
         endSimulacion(words)
+        print('clk', timestamp, '   processStatus', processStatus)
     else:
         error("error de cod")
-    
-    print('processStatus', processStatus)
+
 
 
