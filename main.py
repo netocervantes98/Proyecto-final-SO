@@ -16,13 +16,15 @@
 
 import sys
 import math
+import pprint
 
 logLines = []
 quantum = 0
 case = 0 # 0 RR   1 prioNonPreemptive
 llega_length = 3
 
-processStatus = {}
+processStatus = {} # 0 status  # 1 llegada  # 2 priority  # 3 cpu  # 4 io  # 5 temp
+processFinished = {} # 0 name  # 1 llegada  # 2 salida  # 3 cpu  # 4 espera  # 5 turnaround # 6 io
 waitQueue = []
 blockedQueue = []
 
@@ -31,31 +33,48 @@ cpu = None
 
 def llega(words, line):
     global waitQueue
-    timestamp, processID  = validateLengthAndReturnNumbers(words, llega_length, line)[0:1]
+    timestamp, processID, priority  = validateLengthAndReturnNumbers(words, llega_length, line, (case == 1 or (case == 2)))
     if processID in processStatus:
-        error(line, "El proceso " + str(processID) + " ya estaba dentro en " + processStatus[processID])
+        error(line, "El proceso " + str(processID) + " ya estaba dentro en " + processStatus[processID][0])
     else:
-        processStatus[processID] = 'waitQueue'
-        waitQueue.append(processID)
+        processStatus[processID] = ['waitQueue', timestamp, priority, 0, 0, 0]
+        if priority is None:
+            waitQueue.append(processID)
+        else:
+            waitQueue[priority].append(processID)
     if cpu is None:
-            endCurrentProcess(False, timestamp)
+        endCurrentProcess(False, timestamp)
+    else:
+        print('clk', timestamp, '   processStatus', processStatus)
+
 
 
 def acaba(words, line):
-    global processStatus, waitQueue, blockedQueue
+    global processStatus, waitQueue, blockedQueue, processFinished
     timestamp, processID  = validateLengthAndReturnNumbers(words, 3, line)
     if not processID in processStatus:
         error(line, "El proceso " + str(processID) + " no estaba registrado.")
     else:
         status = processStatus[processID]
-        processStatus.pop(processID)
-        if status == 'running':
+        if status[0] == 'running':
             endCurrentProcess(False, timestamp)
-            return
-        if status == 'waitQueue':
-            waitQueue.remove(processID)
-        elif status == 'blockedQueue':
+        elif status[0] == 'waitQueue':
+            if status[2] is None:
+                waitQueue.remove(processID)
+            else:
+                waitQueue[status[2]].remove(processID)
+        elif status[0] == 'blockedQueue':
             blockedQueue.remove(processID)
+        processFinished[processID] = [
+            processID,
+            processStatus[processID][1],
+            timestamp, 
+            processStatus[processID][3],
+            timestamp - processStatus[processID][1] - processStatus[processID][3] - processStatus[processID][4],
+            timestamp - processStatus[processID][1],
+            processStatus[processID][4],
+        ]
+        processStatus.pop(processID)
         print('clk', timestamp, '   processStatus', processStatus)
 
 
@@ -68,13 +87,13 @@ def startIO(words, line):
         status = processStatus[processID]
         if status == 'blockedQueue':
             error(line, "El proceso " + str(processID) + " ya estaba bloqueado.")
-        processStatus[processID] = 'blockedQueue'
-        blockedQueue.append(processID)
-        if status == 'waitQueue':
-            waitQueue.remove(processID)
-            print('clk', timestamp, '   processStatus', processStatus)
+        if status[0] == 'waitQueue':
+            error(line, "El proceso " + str(processID) + " no estaba corriendo.")
         else:
             endCurrentProcess(False, timestamp)
+            processStatus[processID][0] = 'blockedQueue'
+            blockedQueue.append(processID)
+            processStatus[processID][5] = timestamp
 
 
 def endIO(words, line):
@@ -83,15 +102,24 @@ def endIO(words, line):
     if not processID in processStatus:
         error(line, "El proceso " + str(processID) + " no estaba registrado.")
     else:
-        if processStatus[processID] == 'blockedQueue':
+        if processStatus[processID][0] == 'blockedQueue':
             blockedQueue.remove(processID)
-            processStatus[processID] = 'waitQueue'
-            waitQueue.append(processID)
+            processStatus[processID][0] = 'waitQueue'
+            IOtime = timestamp - processStatus[processID][5]
+            processStatus[processID][4] = processStatus[processID][4] + IOtime
+            if processStatus[processID][2] is None:
+                waitQueue.append(processID)
+            else:
+                waitQueue[processStatus[processID][2]].append(processID)
         else:
             error(line, "El proceso " + str(processID) + " no estaba bloqueado.")
 
 
-def endSimulacion(words):
+def endSimulacion(words, line):
+    if processStatus:
+        error(line, "Todavía hay procesos corriendo.")
+    print("name, llegada, salida, cpu, espera, turnaround, io")
+    pprint.pprint(processFinished)
     sys.exit("clk "+ words[0] + "    fin")
 
 
@@ -99,31 +127,52 @@ def error(line, message):
     sys.exit("ERROR en línea " + str(line) + ": "+ message)
 
 
-def validateLengthAndReturnNumbers(words, length, line):
+def validateLengthAndReturnNumbers(words, length, line, append=False):
     if len(words) != length:
         error(line, "Faltaron argumentos. Había " + str(len(words)) + " y se esperaban " + str(length) + ".")
-    return [int(s) for s in words if s.isdigit()]
+    temp = [int(s) for s in words if s.isdigit()]
+    if append:
+        temp.append(None)
+    return temp
 
 def endCurrentProcess(goToBlockedQueue, timestamp):
     global cpu, clk
-    clk = timestamp
-    if goToBlockedQueue and (cpu is not None):
+    if cpu is not None:
+        cpuTime = timestamp - clk
+        processStatus[cpu][3] = processStatus[cpu][3] + cpuTime
+
+    if goToBlockedQueue:
         waitQueue.append(cpu)
-        processStatus[cpu] = 'waitQueue'
+        processStatus[cpu][0] = 'waitQueue'
     if waitQueue:
         cpu = waitQueue.pop(0)
-        processStatus[cpu] = 'running'
+        processStatus[cpu][0] = 'running'
+        processStatus[cpu][5] = timestamp
         print('clk', clk, '   processStatus', processStatus)
     else:
         cpu = None
+    clk = timestamp
 
 
-logFile = open(sys.argv[1])
+logFile = open(sys.argv[1])  # sys.argv[1]
 for line in logFile:
     logLines.append(line)
 
-#case = str.strip(logLines[0])
-quantum = int(logLines[1][7:])
+case = str.strip(str.split(logLines[0], "//", 1)[0])
+if case == "FCFS":
+    case = 1
+elif case == "RR":
+    case = 2
+elif case == "prioNonPreemptive":
+    case = 3
+    waitQueue = [[], [], [], [], [], [], []]
+elif case == "prioPreemptive":
+    case = 4
+    waitQueue = [[], [], [], [], [], [], []]
+else:
+    error(1, "Nombre incorrecto de política.")
+quantum = int(logLines[1][7:]) if int(logLines[1][7:]) != 0 else None
+
 logLines.pop(0)
 logLines.pop(0)
 
@@ -134,10 +183,11 @@ for line, log in enumerate(logLines, start=3):
         error(line, "No se puede leer timestamp.")
     timestamp = int(timestamp)
 
-    if(timestamp - clk) > quantum and waitQueue:
-        ciclos = math.floor((timestamp - clk) / quantum)
-        for i in range(0, ciclos):
-            endCurrentProcess(True, clk + quantum)
+    if quantum is not None:
+        if(timestamp - clk) > quantum and waitQueue:
+            ciclos = math.floor((timestamp - clk) / quantum)
+            for i in range(0, ciclos):
+                endCurrentProcess(True, clk + quantum)
 
     if instruction == "Llega":
         llega(words, line)
@@ -148,8 +198,9 @@ for line, log in enumerate(logLines, start=3):
     elif instruction == "endI/O":
         endIO(words, line)
     elif instruction == "endSimulacion":
-        endSimulacion(words)
+        endSimulacion(words, line)
     else:
         error(line, "No se puede leer log : \'" + log + "\'")
-    if instruction == "Llega" or instruction == "endI/O" or instruction == "endSimulacion":
+
+    if instruction == "endI/O" or instruction == "endSimulacion":
         print('clk', timestamp, '   processStatus', processStatus)

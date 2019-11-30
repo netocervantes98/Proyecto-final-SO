@@ -8,10 +8,10 @@ QUANTUM 0
 25 endI/O 1
 30 startI/O 2
 35 Llega 5
-40 start I/O 1
+40 startI/O 1
 45 Llega 6
-50 end I/O 1
-55 end I/O 2
+50 endI/O 1
+55 endI/O 2
 60 Acaba 2
 65 Acaba 3
 70 Acaba 1
