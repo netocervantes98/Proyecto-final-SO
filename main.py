@@ -28,6 +28,7 @@ processStatus = {} # 0 status  # 1 llegada  # 2 priority  # 3 cpu  # 4 io  # 5 t
 processFinished = {} # 0 name  # 1 llegada  # 2 salida  # 3 cpu  # 4 espera  # 5 turnaround # 6 io
 waitQueue = []
 blockedQueue = []
+completed = []
 eventTable = []
 
 clk = 0
@@ -78,6 +79,7 @@ def acaba(words, line):
             processStatus[processID][4],
         ]
         processStatus.pop(processID)
+        completed.append(processID)
         #print('clk', timestamp, '   processStatus', processStatus)
         addSnapshot(timestamp, "Acaba", str(processID))
 
@@ -122,6 +124,7 @@ def endIO(words, line):
 def endSimulacion(words, line):
     if processStatus:
         error(line, "Todavía hay procesos corriendo.")
+    addSnapshot(words[0], "Fin", "")
     printTable()
     print("\n")
     printStats()
@@ -146,6 +149,9 @@ def addSnapshot(timestamp, eventName, process):
         
     for pid in blockedQueue:
         event[3].append(pid)
+        
+    for pid in completed:
+        event[4].append(pid)
     
     eventTable.append(event)
     
