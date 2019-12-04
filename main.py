@@ -28,6 +28,7 @@ processStatus = {} # 0 status  # 1 llegada  # 2 priority  # 3 cpu  # 4 io  # 5 t
 processFinished = {} # 0 name  # 1 llegada  # 2 salida  # 3 cpu  # 4 espera  # 5 turnaround # 6 io
 waitQueue = []
 blockedQueue = []
+eventTable = []
 
 clk = 0
 cpu = None
@@ -46,7 +47,8 @@ def llega(words, line):
     if cpu is None:
         endCurrentProcess(False, timestamp)
     else:
-        print('clk', timestamp, '   processStatus', processStatus)
+        #print('clk', timestamp, '   processStatus', processStatus)
+        addSnapshot(timestamp, "Llega",str( processID))
 
 
 
@@ -76,7 +78,8 @@ def acaba(words, line):
             processStatus[processID][4],
         ]
         processStatus.pop(processID)
-        print('clk', timestamp, '   processStatus', processStatus)
+        #print('clk', timestamp, '   processStatus', processStatus)
+        addSnapshot(timestamp, "Acaba", str(processID))
 
 
 def startIO(words, line):
@@ -120,13 +123,31 @@ def endSimulacion(words, line):
     if processStatus:
         error(line, "Todavía hay procesos corriendo.")
     printTable()
+    print("\n")
     printStats()
     sys.exit("clk "+ words[0] + "    fin")
     
 
 def printTable():
     headers = ["Evento", "Cola de listos", "CPU", "Bloqueados", "Terminados"]
-    #TODO: imprimir toda la lista de de eventos
+    print(tabulate(eventTable, headers=headers,tablefmt="orgtbl"))
+    
+
+def addSnapshot(timestamp, eventName, process):
+    global processStatus, waitQueue, blockedQueue
+    eventString = str(timestamp) + " " + eventName + " " + process
+    event = [eventString, [], 0, [], []] # evento, listos, cpu, bloquados, terminados
+    
+    for pid in waitQueue:
+        event[1].append(pid)
+        
+    for pid, value in processStatus.items():
+        if(value[0] == "running"): event[2] = pid
+        
+    for pid in blockedQueue:
+        event[3].append(pid)
+    
+    eventTable.append(event)
     
 
 def printStats():
@@ -164,7 +185,8 @@ def endCurrentProcess(goToBlockedQueue, timestamp):
         cpu = waitQueue.pop(0)
         processStatus[cpu][0] = 'running'
         processStatus[cpu][5] = timestamp
-        print('clk', clk, '   processStatus', processStatus)
+        #print('clk', clk, '   processStatus', processStatus)
+        addSnapshot(timestamp, "Quantum", "")
     else:
         cpu = None
     clk = timestamp
