@@ -148,13 +148,13 @@ def endCurrentProcess(goToBlockedQueue, timestamp):
         cpu = waitQueue.pop(0)
         processStatus[cpu][0] = 'running'
         processStatus[cpu][5] = timestamp
-        print('clk', clk, '   processStatus', processStatus)
+        print('clk', timestamp, '   processStatus', processStatus)
     else:
         cpu = None
     clk = timestamp
 
 
-logFile = open(sys.argv[1])  # sys.argv[1]
+logFile = open(sys.argv[1])# "FCFS.log") #sys.argv[1])
 for line in logFile:
     logLines.append(line)
 
