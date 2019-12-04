@@ -17,6 +17,7 @@
 import sys
 import math
 import pprint
+from tabulate import tabulate
 
 logLines = []
 quantum = 0
@@ -118,9 +119,24 @@ def endIO(words, line):
 def endSimulacion(words, line):
     if processStatus:
         error(line, "Todavía hay procesos corriendo.")
-    print("name, llegada, salida, cpu, espera, turnaround, io")
-    pprint.pprint(processFinished)
+    printTable()
+    printStats()
     sys.exit("clk "+ words[0] + "    fin")
+    
+
+def printTable():
+    headers = ["Evento", "Cola de listos", "CPU", "Bloqueados", "Terminados"]
+    #TODO: imprimir toda la lista de de eventos
+    
+
+def printStats():
+    headers = ["Proceso", "T. Llegada", "T. Salida", "T. CPU", "T. espera", "Turnaround", "T. I/O"]
+    table = sorted(processFinished.values())
+    print(tabulate(table, headers=headers,tablefmt="orgtbl"))
+    tEspPromedio = sum([table[i][4] for i in range(len(table))]) / len(table)
+    print("\nTiempo de espera promedio: ", tEspPromedio)
+    turnaroundPromedio = sum([table[i][5] for i in range(len(table))]) / len(table)
+    print("Turnaround promedio: ", turnaroundPromedio, "\n")
 
 
 def error(line, message):
